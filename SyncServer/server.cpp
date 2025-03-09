@@ -145,43 +145,45 @@ void write_to_socket(boost::asio::ip::tcp::socket& sock) {
     }
 }
 
-using socket_ptr = std::shared_ptr<boost::asio::ip::tcp::socket>;
 std::set<std::shared_ptr<std::thread>> thread_set;
+using socket_ptr = std::shared_ptr<boost::asio::ip::tcp::socket>;
 
 void session(socket_ptr sock) {
     try {
-        for(;;) {
+        for (;;) {
             char data[MAX_LENGTH];
             memset(data, '\0', MAX_LENGTH);
             boost::system::error_code ec;
             int length = sock->read_some(boost::asio::buffer(data, MAX_LENGTH), ec);
             if (ec == boost::asio::error::eof) {
-                std::cout << "Connection closed by peer." << std::endl;
-            } else if (ec) {
+                std::cout << "Connection closed by peer..." << std::endl;
+                break;
+            }
+            else if (ec) {
                 throw boost::system::system_error(ec);
                 break;
             }
-            std::cout 
-                << "receive message from: " 
+            std::cout
+                << "receive from: "
                 << sock->remote_endpoint().address().to_string()
-                << "\n"
-                << "message is: "
+                << "\nMessage is: "
                 << data << std::endl;
             sock->send(boost::asio::buffer(data, MAX_LENGTH));
         }
     }
     catch(std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+        std::cout << "Exception is: " << e.what() << std::endl;
     }
 }
 
 void server(boost::asio::io_context& ioc, unsigned short port_num) {
     boost::asio::ip::address_v4 ip_address = boost::asio::ip::address_v4::any();
     boost::asio::ip::tcp::endpoint ep(ip_address, port_num);
-    for(;;) {
+    // acceptor的初始化写在循环外
+    // 因为acceptor绑定一次端口就够, 不需要重复绑定
+    boost::asio::ip::tcp::acceptor acceptor(ioc, ep);
+    for (;;) {
         socket_ptr socket(new boost::asio::ip::tcp::socket(ioc));
-
-        boost::asio::ip::tcp::acceptor acceptor(ioc, ep);
         acceptor.accept(*socket);
         auto t = std::make_shared<std::thread>(session, socket);
         thread_set.insert(t);
@@ -197,6 +199,6 @@ int main() {
         }
     }
     catch(std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+        std::cout << "Exception is: " << e.what() << std::endl;
     }
 }
