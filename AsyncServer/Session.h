@@ -22,10 +22,24 @@ public:
     void WriteToSocket(const std::string& buf);
     void WriteCallBack(
         const boost::system::error_code& ec,
-        std::size_t bytes_tranferred,
-        std::shared_ptr<MsgNode> msg_node);
+        std::size_t bytes_tranferred);
+    void WriteAll2Socket(const std::string& buf);
+    void WriteAllCallBack(
+        const boost::system::error_code& ec,
+        std::size_t bytes_tranferred);
+
+    void ReadFromSocket();
+    void ReadCallBack(
+        boost::system::error_code& ec,
+        std::size_t bytes_tranferred);
+    void ReadAllFromSocket();
+    void ReadAllCallBack(
+        boost::system::error_code& ec,
+        std::size_t bytes_tranferred);
 private:
     std::shared_ptr<net::socket> _socket;
     std::queue<std::shared_ptr<MsgNode>> _send_queue;
     bool _send_pending;
+    std::shared_ptr<MsgNode> _recv_node;
+    bool _recv_pending;
 };
