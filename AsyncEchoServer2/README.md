@@ -1,11 +1,11 @@
-# AsyncEchoSever-summary
+# AsyncEchoSever2-summary
 
 ## Session
 - 异步处理读写
-- 读完调用返回`async_send`发回给client, 写完继续调用异步读的回调
-- 保证可以长时间监听端口
+- HandleRead和HandleWrite分别是async_read_some和async_send的封装, 用于处理读写
+- HandleRead调用Send以后持续触发HandleRead回调, 保证事件到来时都能进行读取
+- Send内部调用HandleWrite
 ## CServer
 - 监听端口, 异步接收连接, 分配给session进行处理
-- 异步读写的执行依赖于io_context所运行的事件循环, 所以主函数要有ioc.run()
-- ioc就是封装的IO多路复用技术, 可以理解成epoll去监听事件
-
+- 实现map+ClearSession管理session的生命周期
+- 避免在读写过程中session过早析构导致崩溃
