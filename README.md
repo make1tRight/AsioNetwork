@@ -2,12 +2,12 @@
 
 ## 实现回射服务器EchoServer
 - session
-用于处理echo任务
+1. 用于处理echo任务
 - server
-初始化、监听端口并accept对应连接
-创建线程完成session任务
+1. 初始化、监听端口并accept对应连接
+2. 创建线程完成session任务
 - main
-启动服务器
+1. 启动服务器
 
 ## 实现异步读写的回射服务器AsyncEchoServer
 - ioc内部调用epoll_wait, 事件驱动完成读写
