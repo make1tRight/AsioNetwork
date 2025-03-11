@@ -4,6 +4,8 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <iostream>
+#include <iomanip>
+#include <thread>
 
 MsgNode::MsgNode(const char* msg, int total_len)
      : _total_len(total_len + HEAD_LENGTH), _cur_len(0) {
@@ -83,6 +85,9 @@ void Session::HandleWrite(const boost::system::error_code& error,
 void Session::HandleRead(const boost::system::error_code& error,
     size_t bytes_transferred, std::shared_ptr<Session> self_shared) {
     if (!error) {
+        PrintRecvData(_data, bytes_transferred);
+        std::chrono::milliseconds dura(2000);
+        std::this_thread::sleep_for(dura);
         int copy_len = 0;
         while (bytes_transferred > 0) {
             if (!_b_head_parse) {
@@ -210,4 +215,16 @@ void Session::Send(char* msg, int length) {
 void Session::Close() {
     _socket.close();
     _b_close = true;
+}
+
+void Session::PrintRecvData(char* data, int length) {
+    std::stringstream ss;
+    std::string result = "0x";
+    for (int i = 0; i < length; ++i) {
+        std::string hexstr;
+        ss << std::hex << std::setw(2) << std::setfill('0') << data[i] << std::endl;
+        ss >> hexstr;
+        result += hexstr;
+    }
+    std::cout << "receive raw data is: " << result << std::endl;
 }

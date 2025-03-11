@@ -30,6 +30,7 @@ public:
     std::string GetUuid();
     void Send(char* msg, int length);
     void Close();
+    void PrintRecvData(char* data, int length);
 
     ~Session();
 private:
