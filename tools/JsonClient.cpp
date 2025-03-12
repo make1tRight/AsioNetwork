@@ -6,7 +6,6 @@
 #include <jsoncpp/json/json.h>
 #include <jsoncpp/json/value.h>
 #include <jsoncpp/json/reader.h>
-#include "msg.pb.h"
 const int MAX_LENGTH = 1024*2;
 const int HEAD_LENGTH = 2;
 using net = boost::asio::ip::tcp;
