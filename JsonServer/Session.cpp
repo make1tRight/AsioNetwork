@@ -56,11 +56,12 @@ net::socket& Session::Socket() {
 }
 
 void Session::Start() {
-    memset(_data, '\0', MAX_LENGTH);
-    _socket.async_read_some(
-        boost::asio::buffer(_data, MAX_LENGTH),
-        std::bind(&Session::HandleRead,
-             this, std::placeholders::_1, std::placeholders::_2, shared_from_this())
+    // memset(_data, '\0', MAX_LENGTH);
+    _recv_head_node->Clear();
+    asio::async_read(_socket,
+        boost::asio::buffer(_recv_head_node->_msg, HEAD_LENGTH),
+        std::bind(&Session::HandleReadHead,
+             this, std::placeholders::_1, std::placeholders::_2, SharedSelf())
     );
 }
 
@@ -146,13 +147,6 @@ void Session::HandleRead(const boost::system::error_code& error,
                 copy_len += data_len;
                 bytes_transferred -= data_len;
                 _recv_msg_node->_msg[_recv_msg_node->_total_len] = '\0'; //
-                // std::cout << "receive data: " << _recv_msg_node->_msg << std::endl;
-                // MsgData recvdata;
-                // recvdata.ParseFromString(
-                //     std::string(_recv_msg_node->_msg, _recv_msg_node->_total_len));
-                // std::cout << "msg id: " << recvdata.id() 
-                //     << " , message is: " << recvdata.data() << std::endl;
-                // std::string return_str = "server has receive data: " + recvdata.data();
 
                 Json::Value root;
                 Json::Reader reader;
@@ -248,7 +242,7 @@ void Session::Send(char* msg, int length) {
     _socket.async_send(
         asio::buffer(send_node->_msg, send_node->_total_len),
         std::bind(&Session::HandleWrite,
-            this, std::placeholders::_1, shared_from_this())
+            this, std::placeholders::_1, SharedSelf())
     );
 }
 
@@ -269,7 +263,7 @@ void Session::Send(std::string msg) {
     _socket.async_send(
         asio::buffer(send_node->_msg, send_node->_total_len),
         std::bind(&Session::HandleWrite,
-             this, std::placeholders::_1, shared_from_this())
+             this, std::placeholders::_1, SharedSelf())
     );
 }
 
@@ -278,14 +272,72 @@ void Session::Close() {
     _b_close = true;
 }
 
-// void Session::PrintRecvData(char* data, int length) {
-//     std::stringstream ss;
-//     std::string result = "0x";
-//     for (int i = 0; i < length; ++i) {
-//         std::string hexstr;
-//         ss << std::hex << std::setw(2) << std::setfill('0') << data[i] << std::endl;
-//         ss >> hexstr;
-//         result += hexstr;
-//     }
-//     std::cout << "receive raw data is: " << result << std::endl;
-// }
+std::shared_ptr<Session> Session::SharedSelf() {
+    return shared_from_this();
+}
+
+void Session::PrintRecvData(char* data, int length) {
+    std::stringstream ss;
+    std::string result = "0x";
+    for (int i = 0; i < length; ++i) {
+        std::string hexstr;
+        ss << std::hex << std::setw(2) << std::setfill('0') << data[i] << std::endl;
+        ss >> hexstr;
+        result += hexstr;
+    std::cout << "receive raw data is: " << result << std::endl;
+    }
+}
+
+void Session::HandleReadHead(const boost::system::error_code& ec,
+     std::size_t bytes_transferred, std::shared_ptr<Session> self_shared) {
+    if (!ec) {
+        if (bytes_transferred < HEAD_LENGTH) {
+            std::cout << "read head length invalid" << std::endl;
+            Close();
+            _server->ClearSession(_uuid);
+            return;
+        }
+        short data_len = 0;
+        memcpy(&data_len, _recv_head_node->_msg, HEAD_LENGTH);
+        data_len = asio::detail::socket_ops::network_to_host_short(data_len);
+        if (data_len > MAX_LENGTH) {
+            std::cout << "read head length invalid, len is: " << data_len << std::endl;
+            Close();
+            _server->ClearSession(_uuid);
+            return;
+        }
+        std::cout << "data_len is: " << data_len << std::endl;
+        _recv_msg_node = std::make_shared<MsgNode>(data_len);
+        asio::async_read(_socket,
+             asio::buffer(_recv_msg_node->_msg, _recv_msg_node->_total_len),
+             std::bind(&Session::HandleReadMsg,
+                 this, std::placeholders::_1, std::placeholders::_2, SharedSelf())
+        );
+    } else {
+        std::cout << "Failed to HandleReadHead, error is: " << ec.message() << std::endl;
+        Close();
+        _server->ClearSession(_uuid);
+    }
+}
+
+void Session::HandleReadMsg(const boost::system::error_code& ec,
+    std::size_t bytes_transferred, std::shared_ptr<Session> self_shared) {
+    if (!ec) {
+        PrintRecvData(_data, bytes_transferred);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        _recv_msg_node->_msg[_recv_msg_node->_total_len] = '\0';
+        std::cout << "receive data is: "<< _recv_msg_node->_msg << std::endl;
+        Send(_recv_msg_node->_msg, _recv_msg_node->_total_len);
+        // 继续接收头部数据
+        _recv_head_node->Clear();
+        asio::async_read(_socket,
+             asio::buffer(_recv_head_node->_msg, HEAD_LENGTH),
+             std::bind(&Session::HandleReadHead,
+                 this, std::placeholders::_1, std::placeholders::_2, SharedSelf())
+        );
+    } else {
+        std::cout << "Failed to HandleReadMsg, error is: " << ec.message() << std::endl;
+        Close();
+        _server->ClearSession(_uuid);
+    }
+}

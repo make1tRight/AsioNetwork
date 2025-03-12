@@ -31,10 +31,15 @@ public:
     void Send(char* msg, int length);
     void Send(std::string msg);
     void Close();
-    // void PrintRecvData(char* data, int length);
-
+    void PrintRecvData(char* data, int length);
+    
+    std::shared_ptr<Session> SharedSelf();
     ~Session();
 private:
+    void HandleReadHead(const boost::system::error_code& ec,
+         std::size_t bytes_transferred, std::shared_ptr<Session> self_shared);
+    void HandleReadMsg(const boost::system::error_code& ec,
+        std::size_t bytes_transferred, std::shared_ptr<Session> self_shared);
     void HandleWrite(const boost::system::error_code& error,
          std::shared_ptr<Session> self_shared);
     void HandleRead(const boost::system::error_code& error,
