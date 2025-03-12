@@ -8,7 +8,7 @@ const int HEAD_LENGTH = 2;
 class MsgNode {
     friend class Session;
 public:
-    MsgNode(const char* msg, int total_len);
+    MsgNode(const char* msg, short total_len);
     MsgNode(int total_len);
     ~MsgNode();
 
@@ -29,8 +29,9 @@ public:
     void Start();
     std::string GetUuid();
     void Send(char* msg, int length);
+    void Send(std::string msg);
     void Close();
-    void PrintRecvData(char* data, int length);
+    // void PrintRecvData(char* data, int length);
 
     ~Session();
 private:

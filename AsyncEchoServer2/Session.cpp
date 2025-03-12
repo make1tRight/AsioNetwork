@@ -1,5 +1,6 @@
 #include "Session.h"
 #include "CServer.h"
+#include "msg.pb.h"
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -7,13 +8,18 @@
 #include <iomanip>
 #include <thread>
 
-MsgNode::MsgNode(const char* msg, int total_len)
+const int MAX_QUESIZE = 1024;
+
+MsgNode::MsgNode(const char* msg, short total_len)
      : _total_len(total_len + HEAD_LENGTH), _cur_len(0) {
     // ()申请内存的同时还可以把值初始化为0
     _msg = new char[_total_len + 1]();
     // msg里面只有数据, total_len是本次数据包的长度
     // _msg保存数据是[total_len|msg]
-    memcpy(_msg, &total_len, HEAD_LENGTH); //这里第二个参数是*src, 所以要取地址
+    // 这是要发送的内容, 所以从主机字节序转成网络字节序
+    unsigned short total_len_network = asio::detail::socket_ops::host_to_network_short(total_len);
+    memcpy(_msg, &total_len_network, HEAD_LENGTH); //这里第二个参数是*src, 所以要取地址
+    // 复制消息所用的长度还是用主机字节序
     memcpy(_msg + HEAD_LENGTH, msg, total_len);
     _msg[_total_len] = '\0';
 }
@@ -85,9 +91,9 @@ void Session::HandleWrite(const boost::system::error_code& error,
 void Session::HandleRead(const boost::system::error_code& error,
     size_t bytes_transferred, std::shared_ptr<Session> self_shared) {
     if (!error) {
-        PrintRecvData(_data, bytes_transferred);
-        std::chrono::milliseconds dura(2000);
-        std::this_thread::sleep_for(dura);
+        // PrintRecvData(_data, bytes_transferred);
+        // std::chrono::milliseconds dura(2000);
+        // std::this_thread::sleep_for(dura);
         int copy_len = 0;
         while (bytes_transferred > 0) {
             if (!_b_head_parse) {
@@ -108,8 +114,9 @@ void Session::HandleRead(const boost::system::error_code& error,
                     _data + copy_len, head_remain);
                 copy_len += head_remain;
                 bytes_transferred -= head_remain;
-                int data_len = 0;
+                short data_len = 0;
                 memcpy(&data_len, _recv_head_node->_msg, HEAD_LENGTH);
+                data_len = asio::detail::socket_ops::network_to_host_short(data_len);
                 if (data_len > MAX_LENGTH) {
                     std::cerr << "Invalid data_len=" << data_len << std::endl;
                     _server->ClearSession(_uuid);
@@ -137,8 +144,20 @@ void Session::HandleRead(const boost::system::error_code& error,
                 copy_len += data_len;
                 bytes_transferred -= data_len;
                 _recv_msg_node->_msg[_recv_msg_node->_total_len] = '\0'; //
-                std::cout << "receive data: " << _recv_msg_node->_msg << std::endl;
-                Send(_recv_msg_node->_msg, _recv_msg_node->_total_len);
+                // std::cout << "receive data: " << _recv_msg_node->_msg << std::endl;
+                MsgData recvdata;
+                recvdata.ParseFromString(
+                    std::string(_recv_msg_node->_msg, _recv_msg_node->_total_len));
+                std::cout << "msg id: " << recvdata.id() 
+                    << " , message is: " << recvdata.data() << std::endl;
+                
+                std::string return_str = "server has receive data: " + recvdata.data();
+                MsgData msg_return;
+                msg_return.set_id(recvdata.id());
+                msg_return.set_data(return_str);
+                std::string receive_data;
+                msg_return.SerializeToString(&receive_data);
+                Send(receive_data);
                 _b_head_parse = false;
                 _recv_head_node->Clear(); //
                 if (bytes_transferred <= 0) {
@@ -171,8 +190,21 @@ void Session::HandleRead(const boost::system::error_code& error,
             copy_len += msg_remain;
             bytes_transferred -= msg_remain;
             _recv_msg_node->_msg[_recv_msg_node->_total_len] = '\0'; //
-            std::cout << "receive data: " << _recv_msg_node->_msg << std::endl;
-            Send(_recv_msg_node->_msg, _recv_msg_node->_total_len);
+            // std::cout << "receive data: " << _recv_msg_node->_msg << std::endl;
+
+            MsgData recvdata;
+            recvdata.ParseFromString(
+                std::string(_recv_msg_node->_msg, _recv_msg_node->_total_len));
+            std::cout << "msg id: " << recvdata.id() 
+                << " , message is: " << recvdata.data() << std::endl;
+            
+            std::string return_str = "server has receive data: " + recvdata.data();
+            MsgData msg_return;
+            msg_return.set_id(recvdata.id());
+            msg_return.set_data(return_str);
+            std::string receive_data;
+            msg_return.SerializeToString(&receive_data);
+            Send(receive_data);
             _b_head_parse = false;
             _recv_head_node->Clear(); //
             if (bytes_transferred <= 0) {
@@ -195,13 +227,17 @@ void Session::HandleRead(const boost::system::error_code& error,
 }
 
 void Session::Send(char* msg, int length) {
-    bool pending = false;
     std::lock_guard<std::mutex> lock(_send_lock);
-    if (_send_queue.size() > 0) {
-        pending = true;
+    int send_queue_size = _send_queue.size();
+    // 限制队列长度, 避免无限增长
+    if (send_queue_size > MAX_QUESIZE) {
+        std::cout << "session: " << _uuid 
+            << " send_queue is full, MAX_QUESIZE=" << MAX_QUESIZE << std::endl;
+        return;
     }
+
     _send_queue.push(std::make_shared<MsgNode>(msg, length));
-    if (pending == true) {
+    if (send_queue_size > 0) {
         return;
     }
     auto& send_node = _send_queue.front();
@@ -212,19 +248,40 @@ void Session::Send(char* msg, int length) {
     );
 }
 
+void Session::Send(std::string msg) {
+    
+    std::lock_guard<std::mutex> lock(_send_lock);
+    int send_queue_size = _send_queue.size();
+    if (send_queue_size > MAX_QUESIZE) {
+        std::cout << "session: " << _uuid 
+            << " send_queue is full, MAX_QUESIZE=" << MAX_QUESIZE << std::endl;
+        return;
+    }
+    _send_queue.push(std::make_shared<MsgNode>(msg.c_str(), msg.size()));
+    if (send_queue_size > 0) {
+        return;
+    }
+    auto& send_node = _send_queue.front();
+    _socket.async_send(
+        asio::buffer(send_node->_msg, send_node->_total_len),
+        std::bind(&Session::HandleWrite,
+             this, std::placeholders::_1, shared_from_this())
+    );
+}
+
 void Session::Close() {
     _socket.close();
     _b_close = true;
 }
 
-void Session::PrintRecvData(char* data, int length) {
-    std::stringstream ss;
-    std::string result = "0x";
-    for (int i = 0; i < length; ++i) {
-        std::string hexstr;
-        ss << std::hex << std::setw(2) << std::setfill('0') << data[i] << std::endl;
-        ss >> hexstr;
-        result += hexstr;
-    }
-    std::cout << "receive raw data is: " << result << std::endl;
-}
+// void Session::PrintRecvData(char* data, int length) {
+//     std::stringstream ss;
+//     std::string result = "0x";
+//     for (int i = 0; i < length; ++i) {
+//         std::string hexstr;
+//         ss << std::hex << std::setw(2) << std::setfill('0') << data[i] << std::endl;
+//         ss >> hexstr;
+//         result += hexstr;
+//     }
+//     std::cout << "receive raw data is: " << result << std::endl;
+// }

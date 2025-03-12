@@ -6,6 +6,7 @@
 - HandleRead调用Send以后持续触发HandleRead回调, 保证事件到来时都能进行读取
 - Send内部调用HandleWrite
 - 沾包处理: 先读包头, 根据包头表述的包体长度构造包体并读出数据
+- 发送前进行序列化, 接收后进行反序列化
 ## CServer
 - 监听端口, 异步接收连接, 分配给session进行处理
 - 实现map+ClearSession管理session的生命周期

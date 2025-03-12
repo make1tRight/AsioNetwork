@@ -3,6 +3,9 @@
 #include <iostream>
 #include <boost/asio.hpp>
 #include <boost/system/error_code.hpp>
+#include <jsoncpp/json/json.h>
+#include <jsoncpp/json/value.h>
+#include <jsoncpp/json/reader.h>
 #include "msg.pb.h"
 const int MAX_LENGTH = 1024*2;
 const int HEAD_LENGTH = 2;
@@ -30,12 +33,18 @@ int main() {
                 << std::endl;
             return 0;
         }
-        // 序列化后发送消息
-        MsgData msgdata;
-        msgdata.set_id(1001);
-        msgdata.set_data("hello world!");
-        std::string request;
-        msgdata.SerializeToString(&request);
+        // // 序列化后发送消息
+        // MsgData msgdata;
+        // msgdata.set_id(1001);
+        // msgdata.set_data("hello world!");
+        // std::string request;
+        // msgdata.SerializeToString(&request);
+
+        Json::Value root;
+        root["id"] = 1001;
+        root["data"] = "hello world!";
+        std::string request = root.toStyledString();
+
 
         std::size_t request_length = request.size();
         char send_data[MAX_LENGTH] = { 0 };
@@ -56,10 +65,10 @@ int main() {
         std::size_t reply_msg_length = sock.receive(
             boost::asio::buffer(reply_msg, host_replylen));
         // 将接收到的消息反序列化
-        MsgData recvdata;
-        recvdata.ParseFromArray(reply_msg, host_replylen);
-        std::cout << "msg id: " << recvdata.id() 
-            << " , message is: " << recvdata.data() << std::endl;
+        Json::Reader reader;
+        reader.parse(std::string(reply_msg, reply_msg_length), root);
+        std::cout << "msg id is: " << root["id"] 
+            << ", msg is: " << root["data"] << std::endl;
         getchar();
     }
     catch(std::exception& e) {
