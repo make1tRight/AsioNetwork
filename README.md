@@ -21,3 +21,6 @@
 
 ## grpc通信例程GrpcServer
 - 实现了简单的echo应答
+
+## 实现带逻辑系统的服务器LogicServer
+- 实现了根据不同消息类型(消息id)进行消息分发
