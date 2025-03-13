@@ -36,6 +36,6 @@ make
 # 2. 运行
 # -- server
 ./LogicServer
-# -- client 见./tools/ClientTlvFormat
+# -- client 见../tools/ClientTlvFormat
 ```
 
