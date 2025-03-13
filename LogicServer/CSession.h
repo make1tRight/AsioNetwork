@@ -22,17 +22,12 @@ public:
     std::string GetUuid();
     void Send(const char* msg, short max_length, short msg_id);
     void Send(std::string msg, short msg_id);
-    // void Send(std::string msg);
     void Close();
     void PrintRecvData(char* data, int length);
     
     std::shared_ptr<CSession> SharedSelf();
     ~CSession();
 private:
-    // void HandleReadHead(const boost::system::error_code& ec,
-    //      std::size_t bytes_transferred, std::shared_ptr<CSession> self_shared);
-    // void HandleReadMsg(const boost::system::error_code& ec,
-    //     std::size_t bytes_transferred, std::shared_ptr<CSession> self_shared);
     void HandleWrite(const boost::system::error_code& error,
          std::shared_ptr<CSession> self_shared);
     void HandleRead(const boost::system::error_code& error,

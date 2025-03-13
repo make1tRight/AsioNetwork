@@ -24,3 +24,19 @@
 - 从逻辑队列中取出消息, 根据已注册回调对消息进行业务逻辑处理
 - 逻辑系统的核心是用户注册的回调函数
 - id+回调的形式, 实现了将消息根据不同的id进行处理(分发)
+
+# 使用方法
+```bash
+# 1. 编译
+cd LogicServer
+mkdir build && cd build
+cmake ..
+make
+
+# 2. 运行
+# -- server
+./LogicServer
+# -- client
+./LogicServer
+```
+
