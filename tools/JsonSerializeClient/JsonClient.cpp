@@ -32,12 +32,6 @@ int main() {
                 << std::endl;
             return 0;
         }
-        // // 序列化后发送消息
-        // MsgData msgdata;
-        // msgdata.set_id(1001);
-        // msgdata.set_data("hello world!");
-        // std::string request;
-        // msgdata.SerializeToString(&request);
 
         Json::Value root;
         root["id"] = 1001;
