@@ -12,6 +12,9 @@ IOContext& AsioIOContextPool::GetIOContext() {
 }
 void AsioIOContextPool::Stop() {
     for (auto& work : _works) {
+        // io_context有可能还在监听读写事件, 只是把work给析构不能保证iocontext一定退出
+        // 这里需要手动让io_context停止
+        work->get_io_context().stop();
         work.reset();
     }
 
